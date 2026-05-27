@@ -1,0 +1,6 @@
+{
+  "name": "UI Layout & Color Optimizer",
+  "description": "Upload any UI screenshot or mockup to analyze layout, extract colors, and generate professional design optimizations and alternative color schemes.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

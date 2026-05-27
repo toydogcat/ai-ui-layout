@@ -4,9 +4,17 @@ import { DesignSuggestion } from "../types";
 
 interface SuggestionsViewProps {
   suggestions: DesignSuggestion[];
+  onHoverSuggestion?: (suggestion: DesignSuggestion | null) => void;
+  onClickSuggestion?: (suggestion: DesignSuggestion | null) => void;
+  activeSuggestion?: DesignSuggestion | null;
 }
 
-export default function SuggestionsView({ suggestions }: SuggestionsViewProps) {
+export default function SuggestionsView({
+  suggestions,
+  onHoverSuggestion,
+  onClickSuggestion,
+  activeSuggestion
+}: SuggestionsViewProps) {
   const [activeTab, setActiveTab] = useState<'all' | 'layout' | 'typography' | 'color' | 'accessibility' | 'spacing'>('all');
 
   const categories = [
@@ -25,11 +33,11 @@ export default function SuggestionsView({ suggestions }: SuggestionsViewProps) {
   const getSeverityBadge = (severity: 'high' | 'medium' | 'low') => {
     switch (severity) {
       case 'high':
-        return <span className="bg-rose-50 text-rose-600 border border-rose-100 text-[10px] font-bold px-2 py-0.5 rounded-md">必須優化</span>;
+        return <span className="bg-rose-950/60 text-rose-450 border border-rose-900/40 text-[10px] font-bold px-2 py-0.5 rounded-md">必須優化</span>;
       case 'medium':
-        return <span className="bg-amber-50 text-amber-700 border border-amber-100 text-[10px] font-bold px-2 py-0.5 rounded-md">高度建議</span>;
+        return <span className="bg-amber-950/60 text-amber-450 border border-amber-900/40 text-[10px] font-bold px-2 py-0.5 rounded-md">高度建議</span>;
       case 'low':
-        return <span className="bg-slate-50 text-slate-500 border border-slate-100 text-[10px] font-bold px-2 py-0.5 rounded-md">優雅微調</span>;
+        return <span className="bg-slate-800 text-slate-400 border border-slate-700 text-[10px] font-bold px-2 py-0.5 rounded-md">優雅微調</span>;
     }
   };
 
@@ -65,8 +73,13 @@ export default function SuggestionsView({ suggestions }: SuggestionsViewProps) {
     <div className="w-full bg-[#131B2E] rounded-2xl border border-slate-800/80 p-6 shadow-sm">
       <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-6 pb-4 border-b border-slate-800/60">
         <div>
-          <h3 className="text-slate-100 font-bold text-lg font-sans">診斷優化建議清單</h3>
-          <p className="text-slate-400 text-xs">AI 深度檢視核心 UI 問題，指出具體痛點並給出最佳改良方案</p>
+          <h3 className="text-slate-100 font-bold text-lg font-sans flex items-center gap-2">
+            <span>診斷優化建議清單</span>
+            <span className="text-[10px] bg-indigo-900/50 text-indigo-300 font-bold px-2 py-0.5 rounded border border-indigo-800/40">
+              滑鼠懸停卡片以在上方截圖標記位置
+            </span>
+          </h3>
+          <p className="text-slate-400 text-xs">AI 幾何算法與色彩聚類深度檢視 UI 問題，指出具體痛點並給出最佳改良方案</p>
         </div>
 
         {/* Categories Tab Pill List */}
@@ -101,65 +114,73 @@ export default function SuggestionsView({ suggestions }: SuggestionsViewProps) {
         </div>
       ) : (
         <div className="space-y-4">
-          {filteredSuggestions.map((suggestion, idx) => (
-            <div 
-              key={idx}
-              className="border border-slate-800/65 rounded-2xl bg-[#0B0F19]/40 hover:border-slate-700/80 transition-all shadow-xs overflow-hidden"
-            >
-              {/* Header Box */}
-              <div className="p-4 bg-[#0F172E]/50 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 border-b border-slate-800/50">
-                <div className="flex items-center gap-2.5">
-                  <div className="p-1.5 bg-[#1e293b] rounded-lg border border-slate-850 shadow-xs">
-                    {getCategoryIcon(suggestion.category)}
+          {filteredSuggestions.map((suggestion, idx) => {
+            const isHighlighted = activeSuggestion?.title === suggestion.title;
+            return (
+              <div 
+                key={idx}
+                onMouseEnter={() => onHoverSuggestion?.(suggestion)}
+                onMouseLeave={() => onHoverSuggestion?.(null)}
+                onClick={() => onClickSuggestion?.(suggestion)}
+                className={`border rounded-2xl bg-[#0B0F19]/40 hover:border-indigo-500/50 transition-all duration-300 shadow-xs overflow-hidden cursor-pointer
+                  ${isHighlighted ? "border-indigo-500 shadow-md shadow-indigo-500/5 ring-1 ring-indigo-500/50" : "border-slate-800/65"}
+                `}
+              >
+                {/* Header Box */}
+                <div className="p-4 bg-[#0F172E]/50 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 border-b border-slate-800/50">
+                  <div className="flex items-center gap-2.5">
+                    <div className="p-1.5 bg-[#1e293b] rounded-lg border border-slate-850 shadow-xs">
+                      {getCategoryIcon(suggestion.category)}
+                    </div>
+                    <div>
+                      <span className="text-[10px] bg-[#1e293b]/70 text-slate-400 font-bold px-1.5 py-0.5 rounded">
+                        {getCategoryName(suggestion.category)}
+                      </span>
+                      <h4 className="text-slate-200 font-bold text-sm tracking-tight mt-1">
+                        {suggestion.title}
+                      </h4>
+                    </div>
                   </div>
-                  <div>
-                    <span className="text-[10px] bg-[#1e293b]/70 text-slate-400 font-bold px-1.5 py-0.5 rounded">
-                      {getCategoryName(suggestion.category)}
-                    </span>
-                    <h4 className="text-slate-200 font-bold text-sm tracking-tight mt-1">
-                      {suggestion.title}
-                    </h4>
+
+                  <div className="flex items-center gap-2 shrink-0">
+                    {getSeverityBadge(suggestion.severity)}
                   </div>
                 </div>
 
-                <div className="flex items-center gap-2 shrink-0">
-                  {getSeverityBadge(suggestion.severity)}
+                {/* Description & Fix section */}
+                <div className="p-5 space-y-4">
+                  <p className="text-slate-400 text-sm leading-relaxed">
+                    {suggestion.description}
+                  </p>
+
+                  {/* Compare Box */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-1.5">
+                    {/* Before */}
+                    <div className="p-4 rounded-xl bg-rose-950/15 border border-rose-900/20 text-xs">
+                      <div className="flex items-center gap-1.5 text-rose-400 font-bold mb-2">
+                        <span className="w-1.5 h-1.5 bg-rose-500 rounded-full"></span>
+                        原始畫面痛點 (Before)
+                      </div>
+                      <p className="text-slate-300 leading-relaxed font-medium">
+                        {suggestion.before}
+                      </p>
+                    </div>
+
+                    {/* After */}
+                    <div className="p-4 rounded-xl bg-emerald-950/15 border border-emerald-900/20 text-xs">
+                      <div className="flex items-center gap-1.5 text-emerald-400 font-bold mb-2">
+                        <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full"></span>
+                        建議優化手法 (After)
+                      </div>
+                      <p className="text-slate-300 leading-relaxed font-medium">
+                        {suggestion.after}
+                      </p>
+                    </div>
+                  </div>
                 </div>
               </div>
-
-              {/* Description & Fix section */}
-              <div className="p-5 space-y-4">
-                <p className="text-slate-400 text-sm leading-relaxed">
-                  {suggestion.description}
-                </p>
-
-                {/* Compare Box */}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-1.5">
-                  {/* Before */}
-                  <div className="p-4 rounded-xl bg-rose-950/15 border border-rose-905/40 text-xs">
-                    <div className="flex items-center gap-1.5 text-rose-400 font-bold mb-2">
-                      <span className="w-1.5 h-1.5 bg-rose-500 rounded-full"></span>
-                      原始畫面痛點 (Before)
-                    </div>
-                    <p className="text-slate-300 leading-relaxed font-medium">
-                      {suggestion.before}
-                    </p>
-                  </div>
-
-                  {/* After */}
-                  <div className="p-4 rounded-xl bg-emerald-950/15 border border-emerald-905/40 text-xs">
-                    <div className="flex items-center gap-1.5 text-emerald-400 font-bold mb-2">
-                      <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full"></span>
-                      建議優化手法 (After)
-                    </div>
-                    <p className="text-slate-300 leading-relaxed font-medium">
-                      {suggestion.after}
-                    </p>
-                  </div>
-                </div>
-              </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
     </div>
