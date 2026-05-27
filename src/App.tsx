@@ -55,7 +55,7 @@ const DEMO_OPTIMIZATION_RESULT: OptimizationResult = {
   ],
   reconstructedWireframe: [
     {
-      id: "box-header",
+      id: "wf-nav",
       type: "header",
       label: "極簡對齊頂部導航列 (Standard Grid Header)",
       alignment: "水平滿寬 w-full，左右 padding 48px，左右元件分散對齊 (justify-between & items-center)",
@@ -64,7 +64,7 @@ const DEMO_OPTIMIZATION_RESULT: OptimizationResult = {
       contents: ["系統徽標 Logo", "一級主題切換列", "個人頭像選單", "全域搜尋框"]
     },
     {
-      id: "box-hero",
+      id: "wf-hero",
       type: "hero",
       label: "主動式優化行動英雄看板 (Action Hero Canopy)",
       alignment: "水平置中限寬 max-w-6xl，內部排版改為左對齊配右側形象卡片",
@@ -73,13 +73,22 @@ const DEMO_OPTIMIZATION_RESULT: OptimizationResult = {
       contents: ["大字重引人入勝標題 (24px Bold)", "呼應 CTA 按鈕 (Padding 12px 24px)", "輔助說明標籤快取"]
     },
     {
-      id: "box-grid",
+      id: "wf-body",
       type: "card",
       label: "標準化呼吸度三欄卡片模組 (Clean 3-Column Card Grid)",
       alignment: "網格排版系統 grid-cols-1 md:grid-cols-3，安全間距 gap-6 強制等寬對稱",
       optimalSpacing: "卡片邊界 Padding 24px (p-6), 子元件間隔 Gap 12px",
       colorRole: "card-bg",
       contents: ["核心數據看盤", "即時回饋清單", "互動式分析指標元件"]
+    },
+    {
+      id: "wf-footer",
+      type: "footer",
+      label: "頁尾聲明區 (Footer Area)",
+      alignment: "水平居中對齊",
+      optimalSpacing: "內邊距: 24px | 垂直間距: 8px",
+      colorRole: "background",
+      contents: ["© 2026 版權聲明 | 隱私權政策"]
     }
   ],
   colorConversions: [
@@ -156,11 +165,15 @@ export default function App() {
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [naturalWidth, setNaturalWidth] = useState(1000);
   const [naturalHeight, setNaturalHeight] = useState(1000);
+  const [analysisScale, setAnalysisScale] = useState(1);
   const [ocrResults, setOcrResults] = useState<OcrItem[]>(DEMO_OCR_RESULTS);
   const [activeSuggestion, setActiveSuggestion] = useState<DesignSuggestion | null>(null);
   const [showOverlay, setShowOverlay] = useState(true);
 
   const workerRef = useRef<Worker | null>(null);
+  const pendingInitResolve = useRef<((w: Worker) => void) | null>(null);
+  const pendingRecognizeResolve = useRef<((results: OcrItem[]) => void) | null>(null);
+  const pendingReject = useRef<((err: Error) => void) | null>(null);
 
   // Set default preview image on component load
   useEffect(() => {
@@ -221,8 +234,8 @@ export default function App() {
         console.log("[App] Cache Miss. Downloading:", url);
         const buffer = await fetchWithProgress(url, onProgress);
 
-        // Put in cache for next loads
-        await cache.put(url, new Response(buffer));
+        // Put in cache for next loads - use slice to keep a copy for cache since it might be transferred
+        await cache.put(url, new Response(buffer.slice(0)));
         return buffer;
       } catch (err) {
         console.warn("[App] Cache Storage failure, falling back to direct fetch...", err);
@@ -233,66 +246,61 @@ export default function App() {
   };
 
   // Initialize PaddleOCR Web Worker
-  const initWorker = (): Promise<Worker> => {
-    return new Promise(async (resolve, reject) => {
-      if (workerRef.current) {
-        resolve(workerRef.current);
-        return;
-      }
+  const initWorker = async (): Promise<Worker> => {
+    if (workerRef.current) return workerRef.current;
 
-      try {
-        // 1. Download Detection Model
-        setLoadingStage("loading-det");
-        setLoadingStatusText("正在下載 OCR 幾何偵測模型 (PP-OCRv4)...");
-        setLoadingProgress(0);
-        const detBuffer = await getModelWithCache(DET_MODEL_URL, (p) => setLoadingProgress(p));
+    const detBuffer = await getModelWithCache(DET_MODEL_URL, (p) => {
+      setLoadingStage("loading-det");
+      setLoadingStatusText("正在下載 OCR 幾何偵測模型 (PP-OCRv4)...");
+      setLoadingProgress(p);
+    });
 
-        // 2. Download Recognition Model
-        setLoadingStage("loading-rec");
-        setLoadingStatusText("正在下載 OCR 文字辨識模型...");
-        setLoadingProgress(0);
-        const recBuffer = await getModelWithCache(REC_MODEL_URL, (p) => setLoadingProgress(p));
+    const recBuffer = await getModelWithCache(REC_MODEL_URL, (p) => {
+      setLoadingStage("loading-rec");
+      setLoadingStatusText("正在下載 OCR 文字辨識模型...");
+      setLoadingProgress(p);
+    });
 
-        // 3. Download Dictionary
-        setLoadingStage("initializing");
-        setLoadingStatusText("正在載入文字字典配置檔...");
-        setLoadingProgress(30);
-        const dictUrl = `${import.meta.env.BASE_URL.replace(/\/$/, "")}/paddle/ppocr_keys_v1.txt`;
-        const dictRes = await fetch(dictUrl);
-        if (!dictRes.ok) throw new Error("無法讀取字典檔案");
-        const dictContent = await dictRes.text();
+    setLoadingStage("initializing");
+    setLoadingStatusText("正在載入文字字典配置檔...");
+    setLoadingProgress(30);
+    const dictUrl = `${import.meta.env.BASE_URL.replace(/\/$/, "")}/paddle/ppocr_keys_v1.txt`;
+    const dictRes = await fetch(dictUrl);
+    if (!dictRes.ok) throw new Error("無法讀取字典檔案");
+    const dictContent = await dictRes.text();
 
-        setLoadingProgress(60);
-        setLoadingStatusText("正在建立 100% 離線 WebAssembly 執行緒...");
+    setLoadingProgress(60);
+    setLoadingStatusText("正在建立 100% 離線 WebAssembly 執行緒...");
 
-        // 4. Instantiate worker
-        console.log("[App] Instantiating ocr-worker...");
-        const worker = new Worker(new URL("./ocr-worker.js", import.meta.url), { type: "module" });
+    return new Promise((resolve, reject) => {
+      pendingInitResolve.current = resolve;
+      pendingReject.current = reject;
 
-        worker.onmessage = (e) => {
-          const { type, data } = e.data;
-          if (type === "status") {
-            setLoadingStatusText(data);
-          } else if (type === "initialized") {
-            console.log("[App] Worker successfully initialized.");
-            workerRef.current = worker;
-            resolve(worker);
-          } else if (type === "error") {
-            reject(new Error(data));
-          }
-        };
+      console.log("[App] Instantiating ocr-worker...");
+      const worker = new Worker(new URL("./ocr-worker.js", import.meta.url), { type: "module" });
 
-        // Transfer array buffers to worker thread for 0-copy performance
-        worker.postMessage(
-          {
-            type: "init",
-            data: { detBuffer, recBuffer, dictContent },
-          },
-          [detBuffer, recBuffer]
-        );
-      } catch (err) {
-        reject(err);
-      }
+      worker.onmessage = (e) => {
+        const { type, data } = e.data;
+        if (type === "status") {
+          setLoadingStatusText(data);
+        } else if (type === "initialized") {
+          console.log("[App] Worker successfully initialized.");
+          workerRef.current = worker;
+          pendingInitResolve.current?.(worker);
+        } else if (type === "result") {
+          pendingRecognizeResolve.current?.(data.results || []);
+        } else if (type === "error") {
+          pendingReject.current?.(new Error(data));
+        }
+      };
+
+      worker.postMessage(
+        {
+          type: "init",
+          data: { detBuffer, recBuffer, dictContent },
+        },
+        [detBuffer, recBuffer]
+      );
     });
   };
 
@@ -345,13 +353,23 @@ export default function App() {
       setLoadingProgress(0);
 
       const img = new Image();
-      const imgLoadedPromise = new Promise<{ width: number; height: number; imageData: ImageData }>(
+      const imgLoadedPromise = new Promise<{ width: number; height: number; imageData: ImageData; scale: number }>(
         (resolve, reject) => {
           img.onload = () => {
-            const width = img.naturalWidth;
-            const height = img.naturalHeight;
-            setNaturalWidth(width);
-            setNaturalHeight(height);
+            const nWidth = img.naturalWidth;
+            const nHeight = img.naturalHeight;
+            
+            // Detect Retina/High-res images and scale down for analysis performance
+            // But we keep original natural dimensions for the final SVG overlay rendering
+            const ANALYSIS_MAX_WIDTH = 1280;
+            const scale = nWidth > 2500 ? ANALYSIS_MAX_WIDTH / nWidth : 1;
+            
+            const width = Math.round(nWidth * scale);
+            const height = Math.round(nHeight * scale);
+            
+            setNaturalWidth(nWidth);
+            setNaturalHeight(nHeight);
+            setAnalysisScale(scale);
 
             const canvas = document.createElement("canvas");
             canvas.width = width;
@@ -362,16 +380,16 @@ export default function App() {
               return;
             }
 
-            ctx.drawImage(img, 0, 0);
+            ctx.drawImage(img, 0, 0, width, height);
             const imageData = ctx.getImageData(0, 0, width, height);
-            resolve({ width, height, imageData });
+            resolve({ width, height, imageData, scale });
           };
           img.onerror = () => reject(new Error("上傳圖片解析失敗"));
         }
       );
       img.src = base64Data;
 
-      const { width, height, imageData } = await imgLoadedPromise;
+      const { width, height, imageData, scale } = await imgLoadedPromise;
 
       // 2. Perform client-side K-Means Color Clustering
       setLoadingStatusText("正在進行 K-Means 色彩聚類提取...");
@@ -387,17 +405,8 @@ export default function App() {
       setLoadingProgress(80);
 
       const ocrPromise = new Promise<OcrItem[]>((resolve, reject) => {
-        worker.onmessage = (e) => {
-          const { type, data } = e.data;
-          if (type === "status") {
-            setLoadingStatusText(data);
-          } else if (type === "result") {
-            console.log(`[App] OCR Recognize finished in ${data.duration}ms. Elements count:`, data.results?.length);
-            resolve(data.results || []);
-          } else if (type === "error") {
-            reject(new Error(data));
-          }
-        };
+        pendingRecognizeResolve.current = resolve;
+        pendingReject.current = reject;
       });
 
       worker.postMessage({
@@ -606,10 +615,10 @@ export default function App() {
                       ocrResults={ocrResults}
                       naturalWidth={naturalWidth}
                       naturalHeight={naturalHeight}
+                      analysisScale={analysisScale}
                       activeSuggestion={activeSuggestion}
                       showOverlay={showOverlay}
-                    />
-                  </div>
+                    />                  </div>
                 </div>
               </div>
             )}

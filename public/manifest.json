@@ -1,0 +1,17 @@
+{
+  "name": "AI UI Layout Optimizer",
+  "short_name": "UI Optimizer",
+  "description": "100% Offline Browser-based UI Design Diagnostic Tool",
+  "start_url": "./",
+  "display": "standalone",
+  "background_color": "#0B0F19",
+  "theme_color": "#0B0F19",
+  "icons": [
+    {
+      "src": "demo_ui.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}

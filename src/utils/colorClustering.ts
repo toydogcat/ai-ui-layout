@@ -208,15 +208,21 @@ export function extractDominantColors(imageData: ImageData, k = 5): ExtractedCol
     ];
   }
 
-  // Initialize Centroids randomly from sampled pixels
+  // Initialize Centroids randomly from sampled pixels to ensure diversity and stability
   let centroids: RGB[] = [];
-  const seedStep = Math.floor(pixels.length / k);
+  const usedIdxs = new Set<number>();
   for (let i = 0; i < k; i++) {
-    centroids.push({ ...pixels[Math.min(pixels.length - 1, i * seedStep + 5)] });
+    let idx;
+    // Simple random seed selection (better than fixed offsets)
+    do {
+      idx = Math.floor(Math.random() * pixels.length);
+    } while (usedIdxs.has(idx) && usedIdxs.size < pixels.length);
+    usedIdxs.add(idx);
+    centroids.push({ ...pixels[idx] });
   }
 
-  // Run up to 10 iterations of K-Means
-  const maxIterations = 8;
+  // Run more iterations for better convergence as recommended in the report
+  const maxIterations = 20;
   let assignments = new Int32Array(pixels.length);
 
   for (let iter = 0; iter < maxIterations; iter++) {
@@ -267,7 +273,8 @@ export function extractDominantColors(imageData: ImageData, k = 5): ExtractedCol
       centroids[c] = nextCentroid;
     }
 
-    if (centroidDelta < 1.0) {
+    // Tighter convergence threshold for better precision
+    if (centroidDelta < 0.5) {
       break;
     }
   }

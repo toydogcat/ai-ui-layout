@@ -7,6 +7,7 @@ interface InteractiveOverlayProps {
   ocrResults: OcrItem[];
   naturalWidth: number;
   naturalHeight: number;
+  analysisScale?: number;
   activeSuggestion: DesignSuggestion | null;
   showOverlay: boolean;
   onCopiedText?: (text: string) => void;
@@ -16,6 +17,7 @@ export default function InteractiveOverlay({
   ocrResults,
   naturalWidth,
   naturalHeight,
+  analysisScale = 1,
   activeSuggestion,
   showOverlay,
   onCopiedText
@@ -39,61 +41,69 @@ export default function InteractiveOverlay({
   let highlightedX: number | null = null;
   let highlightedYRange: { y1: number; y2: number } | null = null;
   let highlightedGapRect: { x: number; y: number; w: number; h: number } | null = null;
+if (activeSuggestion) {
+  const desc = activeSuggestion.description;
 
-  if (activeSuggestion) {
-    const desc = activeSuggestion.description;
-    
-    // Parse x coordinate out of title or description if present
-    const xMatch = desc.match(/x:\s*(\d+)px/);
-    if (xMatch) {
-      highlightedX = parseInt(xMatch[1], 10);
-    }
-
-    // Parse spacing coordinates out of title or description
-    const gapMatch = desc.match(/下方間距為\s*(\d+)px/);
-    if (gapMatch) {
-      // Find the item matching this text
-      const itemText = activeSuggestion.title.match(/「(.+?)」/)?.[1] || "";
-      const targetItem = ocrResults.find(i => i.text.includes(itemText));
-      if (targetItem) {
-        highlightedGapRect = {
-          x: targetItem.box.x,
-          y: targetItem.box.y + targetItem.box.height,
-          w: targetItem.box.width,
-          h: parseInt(gapMatch[1], 10)
-        };
-      }
-    }
+  // Parse x coordinate out of title or description if present
+  const xMatch = desc.match(/x:\s*(\d+)px/);
+  if (xMatch) {
+    // Map back to natural scale from analysis scale
+    highlightedX = parseInt(xMatch[1], 10) / analysisScale;
   }
 
+  // Parse gap height if present (e.g. "下方間距為 24px")
+  const gapMatch = desc.match(/下方間距為\s*(\d+)px/);
+  if (gapMatch && ocrResults.length > 0) {
+    // Try to find the item mentioned in title
+    const title = activeSuggestion.title;
+    const itemText = title.match(/「(.+)\.\.\.」/)?.[1] || "";
+    const targetItem = ocrResults.find(i => i.text.startsWith(itemText));
+
+    if (targetItem) {
+      highlightedGapRect = {
+        x: targetItem.box.x / analysisScale,
+        y: (targetItem.box.y + targetItem.box.height) / analysisScale,
+        w: targetItem.box.width / analysisScale,
+        h: parseInt(gapMatch[1], 10) / analysisScale
+      };
+    }
+  }
+}
+
+// 1. Aggregate X coordinates for snapping guides to reduce noise
+const xGroups = new Map<number, number>();
+ocrResults.forEach(item => {
+  const x = item.box.x / analysisScale;
+  if (x <= 10) return; // Ignore very edge alignments
+  let foundKey = [...xGroups.keys()].find(k => Math.abs(k - x) <= 4);
+  if (foundKey !== undefined) {
+    xGroups.set(foundKey, xGroups.get(foundKey)! + 1);
+  } else {
+    xGroups.set(x, 1);
+  }
+});
   return (
     <svg
       className="absolute inset-0 w-full h-full pointer-events-none select-none z-20"
       viewBox={`0 0 ${naturalWidth} ${naturalHeight}`}
       xmlns="http://www.w3.org/2000/svg"
     >
-      {/* 1. Global Alignment Snapping Guides */}
-      {ocrResults.map((item, idx) => {
-        // Draw vertical snapping guides for left alignments
-        const isLeftAlignedWithOthers = ocrResults.some(
-          (other, oIdx) => oIdx !== idx && Math.abs(other.box.x - item.box.x) <= 5
+      {/* 1. Global Alignment Snapping Guides - Only show for groups of 2+ elements */}
+      {[...xGroups.entries()].map(([x, count], gIdx) => {
+        if (count < 2) return null;
+        
+        return (
+          <line
+            key={`line-snap-group-${gIdx}`}
+            x1={x}
+            y1={0}
+            x2={x}
+            y2={naturalHeight}
+            stroke="rgba(59, 130, 246, 0.12)"
+            strokeWidth="1.2"
+            strokeDasharray="4,6"
+          />
         );
-
-        if (isLeftAlignedWithOthers && item.box.x > 10) {
-          return (
-            <line
-              key={`line-snap-${idx}`}
-              x1={item.box.x}
-              y1={0}
-              x2={item.box.x}
-              y2={naturalHeight}
-              stroke="rgba(59, 130, 246, 0.15)"
-              strokeWidth="1.5"
-              strokeDasharray="4,6"
-            />
-          );
-        }
-        return null;
       })}
 
       {/* 2. Highlight Specific Issue from Active Suggestion Card */}
@@ -139,7 +149,7 @@ export default function InteractiveOverlay({
             fontWeight="bold"
             textAnchor="middle"
           >
-            {highlightedGapRect.h}px
+            {Math.round(highlightedGapRect.h * analysisScale)}px
           </text>
         </g>
       )}
@@ -147,7 +157,12 @@ export default function InteractiveOverlay({
       {/* 3. Text Interactive Bounding Boxes */}
       {ocrResults.map((item, idx) => {
         const isCopied = copiedId === idx;
-        const box = item.box;
+        const box = {
+          x: item.box.x / analysisScale,
+          y: item.box.y / analysisScale,
+          width: item.box.width / analysisScale,
+          height: item.box.height / analysisScale
+        };
 
         return (
           <g key={`ocr-box-${idx}`} className="group pointer-events-auto">
@@ -165,28 +180,40 @@ export default function InteractiveOverlay({
               onClick={(e) => handleCopy(item.text, idx, e)}
             />
 
-            {/* Hover Tooltip card background */}
-            <foreignObject
-              x={Math.max(10, Math.min(box.x + box.width / 2 - 90, naturalWidth - 190))}
-              y={box.y - 34 > 10 ? box.y - 34 : box.y + box.height + 6}
-              width="180"
-              height="28"
+            {/* Pure SVG Tooltip (Better Safari/iOS compatibility than foreignObject) */}
+            <g 
               className="opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity duration-200"
+              transform={`translate(${Math.max(10, Math.min(box.x + box.width / 2 - 90, naturalWidth - 190))}, ${box.y - 34 > 10 ? box.y - 34 : box.y + box.height + 6})`}
             >
-              <div className="bg-slate-950/90 backdrop-blur-md border border-slate-800 text-slate-200 text-[10px] py-1 px-2.5 rounded-lg shadow-xl flex items-center justify-between font-sans">
-                <span className="truncate max-w-[125px] font-medium">{item.text}</span>
-                <span className="flex items-center gap-1 text-[9px] text-slate-400 font-mono scale-90">
-                  {isCopied ? (
-                    <span className="text-emerald-400 font-bold">已複製</span>
-                  ) : (
-                    <>
-                      <span>H:</span>
-                      <span>{box.height}px</span>
-                    </>
-                  )}
-                </span>
-              </div>
-            </foreignObject>
+              <rect 
+                width="180" 
+                height="28" 
+                rx="8" 
+                fill="rgba(11, 15, 25, 0.9)" 
+                stroke="#1e293b" 
+                strokeWidth="1"
+              />
+              <text 
+                x="10" 
+                y="18" 
+                fill="#e2e8f0" 
+                fontSize="10" 
+                fontWeight="500" 
+                fontFamily="sans-serif"
+              >
+                {item.text.length > 20 ? item.text.slice(0, 18) + '...' : item.text}
+              </text>
+              <text 
+                x="170" 
+                y="18" 
+                textAnchor="end" 
+                fill={isCopied ? "#10b981" : "#94a3b8"} 
+                fontSize="9" 
+                fontFamily="monospace"
+              >
+                {isCopied ? "已複製" : `H:${box.height}px`}
+              </text>
+            </g>
           </g>
         );
       })}

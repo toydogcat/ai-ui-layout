@@ -118,7 +118,7 @@ export function analyzeLayout(
 
     if (xDiff > 0 && xDiff <= 8 && verticalOverlap === 0) {
       alignmentIssuesCount++;
-      if (alignmentIssuesCount <= 3) {
+      if (alignmentIssuesCount <= Math.min(10, Math.floor(items.length / 3))) {
         suggestions.push({
           category: "layout",
           title: `「${itemA.text.slice(0, 8)}...」左側微小對齊偏差`,
@@ -158,7 +158,7 @@ export function analyzeLayout(
     const diff = Math.abs(gap1.gap - gap2.gap);
 
     // If gaps are uneven (e.g. 24px and 11px)
-    if (diff >= 8 && gap1.gap > 4 && gap2.gap > 4 && spacingIssuesCount < 3) {
+    if (diff >= 8 && gap1.gap > 4 && gap2.gap > 4 && spacingIssuesCount < Math.min(10, Math.floor(items.length / 3))) {
       spacingIssuesCount++;
       suggestions.push({
         category: "spacing",
