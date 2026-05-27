@@ -385,12 +385,6 @@ export default function WireframePreview({ wireframe, activeTheme }: WireframePr
 
         {/* Sidebar Info/Specs Panel */}
         <div className="xl:col-span-4 space-y-4">
-...
-          </div>
-        </div>
-
-        {/* Sidebar Info/Specs Panel */}
-        <div className="xl:col-span-4 space-y-4">
           <div className="p-4 rounded-xl bg-[#0B0F19]/60 border border-slate-800/70">
             <h4 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-3 flex items-center gap-1.5">
               <span>佈置對齊幾何規範</span>
