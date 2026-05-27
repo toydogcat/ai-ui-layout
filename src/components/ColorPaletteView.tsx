@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { Copy, Check, Palette, ArrowRight, Eye, RefreshCw } from "lucide-react";
+import { Copy, Check, Palette, ArrowRight, Eye, RefreshCw, Download, FileJson } from "lucide-react";
 import { ExtractedColor, AlternativeTheme } from "../types";
 
 interface ColorPaletteViewProps {
@@ -24,6 +24,46 @@ export default function ColorPaletteView({
     });
   };
 
+  const handleExportFigma = () => {
+    const selectedTheme = colorConversions.find(t => t.id === selectedThemeId) || colorConversions[0];
+    
+    // Create Figma Variables JSON structure
+    const figmaData = {
+      version: "1.0.0",
+      name: `UI Optimizer - ${selectedTheme.themeName}`,
+      collections: [
+        {
+          name: "Brand Colors",
+          modes: [{ modeId: "default", name: "Default" }],
+          variables: extractedColors.map(c => ({
+            name: `extracted/${c.name}`,
+            type: "COLOR",
+            valuesByMode: { default: c.hex },
+            description: c.role
+          }))
+        },
+        {
+          name: "Theme Tokens",
+          modes: [{ modeId: "theme", name: selectedTheme.themeName }],
+          variables: selectedTheme.colors.map(c => ({
+            name: `theme/${c.name}`,
+            type: "COLOR",
+            valuesByMode: { theme: c.newHex },
+            description: c.role
+          }))
+        }
+      ]
+    };
+
+    const blob = new Blob([JSON.stringify(figmaData, null, 2)], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `figma-variables-${selectedTheme.id}.json`;
+    link.click();
+    URL.revokeObjectURL(url);
+  };
+
   const selectedTheme = colorConversions.find(t => t.id === selectedThemeId) || colorConversions[0];
 
   return (
@@ -38,6 +78,14 @@ export default function ColorPaletteView({
             <p className="text-slate-400 text-xs">智能提取代表用色，並推薦 3 款具設計意境的轉換調色盤</p>
           </div>
         </div>
+
+        <button
+          onClick={handleExportFigma}
+          className="flex items-center gap-2 px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-bold rounded-xl border border-slate-700 transition-all shadow-sm"
+        >
+          <FileJson size={14} className="text-blue-400" />
+          導出 Figma Variables
+        </button>
       </div>
 
       {/* Grid: Dominant Colors on top, conversion presets below */}

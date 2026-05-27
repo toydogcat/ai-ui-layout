@@ -6,10 +6,65 @@ interface RGB {
   b: number;
 }
 
+interface OKLab {
+  L: number;
+  a: number;
+  b: number;
+}
+
 interface HSL {
   h: number;
   s: number;
   l: number;
+}
+
+// Convert RGB to OKLab (perceptually uniform)
+function rgbToOklab({ r, g, b }: RGB): OKLab {
+  const linearize = (v: number) => (v <= 0.04045 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4));
+  const lr = linearize(r / 255);
+  const lg = linearize(g / 255);
+  const lb = linearize(b / 255);
+
+  const l = 0.4122214708 * lr + 0.5363325363 * lg + 0.0514459929 * lb;
+  const m = 0.2119034982 * lr + 0.6806995451 * lg + 0.1073970037 * lb;
+  const s = 0.0883024619 * lr + 0.2817188376 * lg + 0.6299787005 * lb;
+
+  const l_ = Math.cbrt(l);
+  const m_ = Math.cbrt(m);
+  const s_ = Math.cbrt(s);
+
+  return {
+    L: 0.2104542553 * l_ + 0.793617785 * m_ - 0.0040720468 * s_,
+    a: 1.9779984951 * l_ - 2.428592205 * m_ + 0.4505937099 * s_,
+    b: 0.0259040371 * l_ + 0.7827717662 * m_ - 0.808675766 * s_,
+  };
+}
+
+// Convert OKLab back to RGB
+function oklabToRgb({ L, a, b }: OKLab): RGB {
+  const l_ = L + 0.3963377774 * a + 0.2158037573 * b;
+  const m_ = L - 0.1055613458 * a - 0.0638541728 * b;
+  const s_ = L - 0.0894841775 * a - 1.291485548 * b;
+
+  const l = l_ * l_ * l_;
+  const m = m_ * m_ * m_;
+  const s = s_ * s_ * s_;
+
+  const dr = +4.0767416621 * l - 3.3077115913 * m + 0.2309699292 * s;
+  const dg = -1.2684380046 * l + 2.6097574011 * m - 0.3413193965 * s;
+  const db = -0.0041960863 * l - 0.7034186147 * m + 1.707614701 * s;
+
+  const delinearize = (v: number) => (v <= 0.0031308 ? 12.92 * v : 1.055 * Math.pow(v, 1 / 2.4) - 0.055);
+  return {
+    r: Math.round(Math.max(0, Math.min(1, delinearize(dr))) * 255),
+    g: Math.round(Math.max(0, Math.min(1, delinearize(dg))) * 255),
+    b: Math.round(Math.max(0, Math.min(1, delinearize(db))) * 255),
+  };
+}
+
+// Calculate color distance in OKLab space
+function oklabDistance(c1: OKLab, c2: OKLab): number {
+  return Math.sqrt(Math.pow(c1.L - c2.L, 2) + Math.pow(c1.a - c2.a, 2) + Math.pow(c1.b - c2.b, 2));
 }
 
 // Convert RGB to HEX
@@ -191,17 +246,20 @@ export function extractDominantColors(imageData: ImageData, k = 5): ExtractedCol
   const step = Math.max(1, Math.floor(totalPixels / 2000)) * 4; // 4 channels per pixel (RGBA)
 
   const pixels: RGB[] = [];
+  const oklabPixels: OKLab[] = [];
   for (let i = 0; i < data.length; i += step) {
     // Ignore pure transparent pixels
     if (data[i + 3] < 30) continue;
-    pixels.push({
+    const rgb = {
       r: data[i],
       g: data[i + 1],
       b: data[i + 2],
-    });
+    };
+    pixels.push(rgb);
+    oklabPixels.push(rgbToOklab(rgb));
   }
 
-  if (pixels.length === 0) {
+  if (oklabPixels.length === 0) {
     return [
       { hex: "#FFFFFF", name: "純白背景", ratio: 80, role: "主要背景底色 (Main Background)", isDark: false },
       { hex: "#1E293B", name: "石墨炭藍", ratio: 20, role: "主體文字與排版色 (Primary Typography)", isDark: true },
@@ -209,29 +267,29 @@ export function extractDominantColors(imageData: ImageData, k = 5): ExtractedCol
   }
 
   // Initialize Centroids randomly from sampled pixels to ensure diversity and stability
-  let centroids: RGB[] = [];
+  let centroids: OKLab[] = [];
   const usedIdxs = new Set<number>();
   for (let i = 0; i < k; i++) {
     let idx;
     // Simple random seed selection (better than fixed offsets)
     do {
-      idx = Math.floor(Math.random() * pixels.length);
-    } while (usedIdxs.has(idx) && usedIdxs.size < pixels.length);
+      idx = Math.floor(Math.random() * oklabPixels.length);
+    } while (usedIdxs.has(idx) && usedIdxs.size < oklabPixels.length);
     usedIdxs.add(idx);
-    centroids.push({ ...pixels[idx] });
+    centroids.push({ ...oklabPixels[idx] });
   }
 
   // Run more iterations for better convergence as recommended in the report
   const maxIterations = 20;
-  let assignments = new Int32Array(pixels.length);
+  let assignments = new Int32Array(oklabPixels.length);
 
   for (let iter = 0; iter < maxIterations; iter++) {
     // 1. Assign pixels to closest centroid
-    for (let p = 0; p < pixels.length; p++) {
+    for (let p = 0; p < oklabPixels.length; p++) {
       let minDist = Infinity;
       let minIdx = 0;
       for (let c = 0; c < k; c++) {
-        const d = colorDistance(pixels[p], centroids[c]);
+        const d = oklabDistance(oklabPixels[p], centroids[c]);
         if (d < minDist) {
           minDist = d;
           minIdx = c;
@@ -240,17 +298,17 @@ export function extractDominantColors(imageData: ImageData, k = 5): ExtractedCol
       assignments[p] = minIdx;
     }
 
-    // 2. Recompute centroids
-    const sumsR = new Float64Array(k);
-    const sumsG = new Float64Array(k);
+    // 2. Recompute centroids in OKLab space
+    const sumsL = new Float64Array(k);
+    const sumsA = new Float64Array(k);
     const sumsB = new Float64Array(k);
     const counts = new Int32Array(k);
 
-    for (let p = 0; p < pixels.length; p++) {
+    for (let p = 0; p < oklabPixels.length; p++) {
       const c = assignments[p];
-      sumsR[c] += pixels[p].r;
-      sumsG[c] += pixels[p].g;
-      sumsB[c] += pixels[p].b;
+      sumsL[c] += oklabPixels[p].L;
+      sumsA[c] += oklabPixels[p].a;
+      sumsB[c] += oklabPixels[p].b;
       counts[c]++;
     }
 
@@ -258,36 +316,37 @@ export function extractDominantColors(imageData: ImageData, k = 5): ExtractedCol
     for (let c = 0; c < k; c++) {
       if (counts[c] === 0) {
         // If a centroid got no pixels, assign a random pixel to it
-        const randPixel = pixels[Math.floor(Math.random() * pixels.length)];
+        const randPixel = oklabPixels[Math.floor(Math.random() * oklabPixels.length)];
         centroids[c] = { ...randPixel };
         continue;
       }
 
       const nextCentroid = {
-        r: Math.round(sumsR[c] / counts[c]),
-        g: Math.round(sumsG[c] / counts[c]),
-        b: Math.round(sumsB[c] / counts[c]),
+        L: sumsL[c] / counts[c],
+        a: sumsA[c] / counts[c],
+        b: sumsB[c] / counts[c],
       };
 
-      centroidDelta += colorDistance(centroids[c], nextCentroid);
+      centroidDelta += oklabDistance(centroids[c], nextCentroid);
       centroids[c] = nextCentroid;
     }
 
-    // Tighter convergence threshold for better precision
-    if (centroidDelta < 0.5) {
+    // Tighter convergence threshold for better precision (OKLab scale is smaller than RGB)
+    if (centroidDelta < 0.001) {
       break;
     }
   }
 
   // Calculate cluster sizes and HSL properties
   const sizes = new Int32Array(k);
-  for (let p = 0; p < pixels.length; p++) {
+  for (let p = 0; p < oklabPixels.length; p++) {
     sizes[assignments[p]]++;
   }
 
-  const rawColors = centroids.map((rgb, idx) => {
+  const rawColors = centroids.map((lab, idx) => {
+    const rgb = oklabToRgb(lab);
     const hsl = rgbToHsl(rgb);
-    const ratio = Math.max(1, Math.round((sizes[idx] / pixels.length) * 100));
+    const ratio = Math.max(1, Math.round((sizes[idx] / oklabPixels.length) * 100));
     return { rgb, hsl, ratio };
   });
 

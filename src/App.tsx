@@ -340,6 +340,49 @@ export default function App() {
     }
   }, [result]);
 
+  // Load saved history on mount
+  useEffect(() => {
+    const saved = localStorage.getItem("ui-optimizer-history");
+    if (saved) {
+      try {
+        const history = JSON.parse(saved);
+        if (history && history.length > 0) {
+          const latest = history[0];
+          setResult(latest.result);
+          setOcrResults(latest.ocrResults);
+          setPreviewUrl(latest.previewUrl);
+          setNaturalWidth(latest.naturalWidth);
+          setNaturalHeight(latest.naturalHeight);
+          setAnalysisScale(latest.analysisScale || 1);
+        }
+      } catch (e) {
+        console.error("Failed to load history", e);
+      }
+    }
+  }, []);
+
+  // Save to history when results change
+  const saveToHistory = (data: any) => {
+    try {
+      const saved = localStorage.getItem("ui-optimizer-history");
+      let history = saved ? JSON.parse(saved) : [];
+      
+      // Add new result to the beginning, keep only last 5
+      // Note: We don't save large base64 images to avoid localStorage limits
+      // unless they are the small ones. But here we save previewUrl which might be large.
+      // Better to check size or just save the latest.
+      const entry = {
+        ...data,
+        timestamp: Date.now()
+      };
+      
+      history = [entry, ...history.filter((h: any) => h.timestamp !== entry.timestamp)].slice(0, 5);
+      localStorage.setItem("ui-optimizer-history", JSON.stringify(history));
+    } catch (e) {
+      console.warn("LocalStorage full, history not saved", e);
+    }
+  };
+
   // Main Upload and offline analysis engine
   const handleImageUploaded = async (base64Data: string, mimeType: string) => {
     setIsLoading(true);
@@ -441,6 +484,16 @@ export default function App() {
       if (finalResult.colorConversions.length > 0) {
         setActiveThemeId(finalResult.colorConversions[0].id);
       }
+
+      // 7. Save to diagnostic history
+      saveToHistory({
+        result: finalResult,
+        ocrResults: ocrItems,
+        previewUrl: base64Data, // Be careful with size, but usually users want to see the image
+        naturalWidth: width / scale,
+        naturalHeight: height / scale,
+        analysisScale: scale
+      });
     } catch (err: any) {
       console.error(err);
       setErrorMsg(err.message || "離線分析發生錯誤，請重新上傳嘗試。");

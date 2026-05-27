@@ -8,13 +8,18 @@ import {
   Grid, 
   Heading, 
   Menu, 
-  Image, 
+  Image as ImageIcon, 
   Footprints, 
   CheckSquare, 
   User, 
   Activity,
-  Compass
+  Compass,
+  Search,
+  ChevronRight,
+  Bell,
+  MoreHorizontal
 } from "lucide-react";
+import { motion, AnimatePresence } from "motion/react";
 import { WireframeElement, AlternativeTheme } from "../types";
 
 interface WireframePreviewProps {
@@ -86,13 +91,152 @@ export default function WireframePreview({ wireframe, activeTheme }: WireframePr
     switch (type) {
       case "header": return <Menu size={16} className="text-slate-400" />;
       case "hero": return <Compass size={16} className="text-slate-400" />;
-      case "gallery": return <Image size={16} className="text-slate-400" />;
+      case "gallery": return <ImageIcon size={16} className="text-slate-400" />;
       case "form": return <CheckSquare size={16} className="text-slate-400" />;
       case "sidebar": return <Layout size={16} className="text-slate-400" />;
       case "card": return <Layers size={16} className="text-slate-400" />;
       case "footer": return <Footprints size={16} className="text-slate-400" />;
       case "navigation": return <Activity size={16} className="text-slate-400" />;
       default: return <Grid size={16} className="text-slate-400" />;
+    }
+  };
+
+  // Render specialized mockup components
+  const renderMockupComponent = (el: WireframeElement) => {
+    const bg = getThemeColorStyles(el.colorRole, "bg");
+    const text = getThemeColorStyles(el.colorRole, "text");
+    const accent = getThemeColorStyles("accent", "bg");
+    const accentText = getThemeColorStyles("accent", "text");
+    const isDarkBg = hexToLuma(getThemeColorStyles("background", "bg")) < 120;
+    const borderColor = isDarkBg ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.08)";
+
+    switch (el.type) {
+      case "header":
+      case "navigation":
+        return (
+          <div key={el.id} className="w-full flex items-center justify-between px-6 py-4 rounded-xl border" style={{ backgroundColor: bg, color: text, borderColor }}>
+            <div className="flex items-center gap-6">
+              <div className="w-8 h-8 rounded-lg bg-blue-500 flex items-center justify-center text-white font-bold">L</div>
+              <div className="hidden md:flex items-center gap-4">
+                {el.contents.slice(0, 4).map((item, i) => (
+                  <span key={i} className="text-[10px] font-bold opacity-70 hover:opacity-100 cursor-pointer">{item}</span>
+                ))}
+              </div>
+            </div>
+            <div className="flex items-center gap-3">
+              <Search size={14} className="opacity-60" />
+              <Bell size={14} className="opacity-60" />
+              <div className="w-7 h-7 rounded-full bg-slate-700 border border-slate-600"></div>
+            </div>
+          </div>
+        );
+      
+      case "hero":
+        return (
+          <div key={el.id} className="w-full flex flex-col items-center text-center py-12 px-6 rounded-2xl border" style={{ backgroundColor: bg, color: text, borderColor }}>
+            <div className="max-w-xl space-y-4">
+              <h2 className="text-2xl md:text-3xl font-extrabold tracking-tight leading-tight">
+                {el.contents[0] || "智能設計未來"}
+              </h2>
+              <p className="text-xs md:text-sm opacity-70 max-w-md mx-auto leading-relaxed">
+                {el.contents[1] || "利用 100% 瀏覽器端離線運算，為您的介面提供專業的對齊診斷與精準配色建議。"}
+              </p>
+              <div className="pt-4 flex items-center justify-center gap-3">
+                <button className="px-5 py-2 rounded-lg text-xs font-bold shadow-lg flex items-center gap-2" style={{ backgroundColor: accent, color: accentText }}>
+                  立即開始探索 <ChevronRight size={14} />
+                </button>
+                <button className="px-5 py-2 rounded-lg text-xs font-bold border border-current opacity-70 hover:opacity-100 transition-opacity">
+                  查看展示影片
+                </button>
+              </div>
+            </div>
+          </div>
+        );
+
+      case "card":
+        return (
+          <div key={el.id} className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            {[1, 2, 3].map((i) => (
+              <div key={i} className="rounded-2xl border p-4 space-y-3 transition-transform hover:-translate-y-1" style={{ backgroundColor: bg, color: text, borderColor }}>
+                <div className="w-full aspect-video rounded-xl bg-slate-800/50 flex items-center justify-center opacity-40">
+                  <ImageIcon size={24} />
+                </div>
+                <div className="space-y-2">
+                  <h4 className="text-xs font-bold">{el.contents[i-1] || `精選組件 ${i}`}</h4>
+                  <div className="h-1.5 w-full bg-current opacity-10 rounded-full"></div>
+                  <div className="h-1.5 w-3/4 bg-current opacity-10 rounded-full"></div>
+                </div>
+                <div className="pt-2 flex items-center justify-between">
+                  <span className="text-[10px] font-mono opacity-50">#design_tok</span>
+                  <MoreHorizontal size={14} className="opacity-40" />
+                </div>
+              </div>
+            ))}
+          </div>
+        );
+
+      case "form":
+        return (
+          <div key={el.id} className="max-w-md mx-auto w-full p-6 rounded-2xl border space-y-4" style={{ backgroundColor: bg, color: text, borderColor }}>
+            <div className="space-y-1">
+              <h3 className="text-sm font-bold">{el.label}</h3>
+              <p className="text-[10px] opacity-60">請填寫下方資訊以繼續您的優化之旅</p>
+            </div>
+            <div className="space-y-3">
+              {[0, 1].map(i => (
+                <div key={i} className="space-y-1.5">
+                  <label className="text-[9px] font-bold opacity-70 uppercase tracking-widest">{el.contents[i] || "輸入欄位"}</label>
+                  <div className="w-full h-9 rounded-lg border bg-black/5 flex items-center px-3 text-[10px] opacity-40" style={{ borderColor: 'rgba(128,128,128,0.2)' }}>
+                    在此輸入...
+                  </div>
+                </div>
+              ))}
+              <button className="w-full h-9 rounded-lg text-xs font-bold mt-2" style={{ backgroundColor: accent, color: accentText }}>
+                確認送出
+              </button>
+            </div>
+          </div>
+        );
+
+      case "footer":
+        return (
+          <div key={el.id} className="w-full flex flex-col md:flex-row items-center justify-between px-6 py-8 rounded-xl border border-t-2" style={{ backgroundColor: bg, color: text, borderColor }}>
+            <div className="flex flex-col gap-2 mb-4 md:mb-0">
+              <div className="flex items-center gap-2">
+                <div className="w-5 h-5 rounded bg-blue-500/20 text-blue-400 flex items-center justify-center font-bold text-[10px]">L</div>
+                <span className="text-[10px] font-bold tracking-tight">UI Optimizer</span>
+              </div>
+              <p className="text-[9px] opacity-50">© 2026 Crafted with Passion by Toymsi</p>
+            </div>
+            <div className="flex gap-8">
+              <div className="flex flex-col gap-1.5">
+                <span className="text-[9px] font-bold opacity-40 uppercase">Resources</span>
+                {["Github", "Documentation", "Pricing"].map(t => <span key={t} className="text-[9px] opacity-70 cursor-pointer">{t}</span>)}
+              </div>
+              <div className="flex flex-col gap-1.5">
+                <span className="text-[9px] font-bold opacity-40 uppercase">Company</span>
+                {["About", "Blog", "Contact"].map(t => <span key={t} className="text-[9px] opacity-70 cursor-pointer">{t}</span>)}
+              </div>
+            </div>
+          </div>
+        );
+
+      default:
+        return (
+          <div key={el.id} className="rounded-xl p-4 border" style={{ backgroundColor: bg, color: text, borderColor }}>
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-[10px] font-bold opacity-70 uppercase tracking-wider">{el.label}</span>
+              <span className="text-[9px] font-mono opacity-40">{el.type}</span>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {el.contents.map((c, i) => (
+                <div key={i} className="px-2 py-1 rounded bg-black/5 border border-black/5 text-[10px] opacity-70">
+                  {c}
+                </div>
+              ))}
+            </div>
+          </div>
+        );
     }
   };
 
@@ -136,7 +280,7 @@ export default function WireframePreview({ wireframe, activeTheme }: WireframePr
       <div className="grid grid-cols-1 xl:grid-cols-12 gap-6 items-start">
         {/* Main interactive Canvas */}
         <div className="xl:col-span-8">
-          <div className="bg-slate-950 rounded-2xl p-6 min-h-[480px] shadow-inner relative flex flex-col justify-start">
+          <div className="bg-slate-950 rounded-2xl p-6 min-h-[480px] shadow-inner relative flex flex-col justify-start overflow-hidden">
             
             {/* Browser frame decoration */}
             <div className="flex items-center justify-between border-b border-slate-800/80 pb-3 mb-5">
@@ -152,121 +296,96 @@ export default function WireframePreview({ wireframe, activeTheme }: WireframePr
             </div>
 
             {/* Wireframe contents */}
-            {viewMode === "blueprint" ? (
-              // 1. Blueprint View Mode
-              <div className="space-y-4 flex-1 flex flex-col justify-center">
-                {wireframe.map((el) => {
-                  const isHovered = hoveredElementId === el.id;
-                  return (
-                    <div
-                      key={el.id}
-                      onMouseEnter={() => setHoveredElementId(el.id)}
-                      onMouseLeave={() => setHoveredElementId(null)}
-                      className={`relative rounded-xl border border-dashed p-4 transition-all duration-300
-                        ${isHovered 
-                          ? "border-amber-400 bg-amber-500/5 shadow-md shadow-amber-500/5 -translate-y-0.5" 
-                          : "border-slate-800 hover:border-slate-700 bg-slate-900/30"
-                        }
-                      `}
-                    >
-                      {/* Top labels */}
-                      <div className="flex items-center justify-between mb-2">
-                        <div className="flex items-center gap-2">
-                          {getWireframeIcon(el.type)}
-                          <span className={`text-xs font-bold font-sans ${isHovered ? 'text-amber-300' : 'text-slate-300'}`}>{el.label}</span>
-                          <span className="text-[9px] font-mono uppercase bg-slate-800 text-slate-500 px-1.5 py-0.5 rounded">
-                            {el.type}
-                          </span>
-                        </div>
-                        <span className="text-[10px] text-slate-500 font-mono italic">
-                          {el.optimalSpacing}
-                        </span>
-                      </div>
-
-                      {/* Align rules */}
-                      <div className="text-[10px] text-slate-400 mb-3 leading-snug bg-slate-950/40 p-2 rounded border border-slate-900 font-mono">
-                        <span className="text-slate-500">對齊與留白學：</span>
-                        {el.alignment}
-                      </div>
-
-                      {/* Content items mock (inside block) */}
-                      <div className="flex flex-wrap gap-1.5">
-                        {el.contents.map((item, idy) => (
-                          <span 
-                            key={idy} 
-                            className="text-[10px] font-medium bg-slate-800/80 hover:bg-slate-800 text-slate-400 border border-slate-700/50 px-2 py-1 rounded transition-colors"
-                          >
-                            + {item}
-                          </span>
-                        ))}
-                      </div>
-
-                      {/* Info overlay tooltip indicators on Blueprint hover */}
-                      {isHovered && (
-                        <div className="absolute -top-3.5 right-6 bg-slate-900 border border-amber-500/50 text-[10px] font-bold text-amber-300 px-2.5 py-1 rounded-md shadow-lg pointer-events-none animate-bounce">
-                          {el.optimalSpacing}
-                        </div>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-            ) : (
-              // 2. High Class Mockup View Mode
-              <div 
-                className="rounded-xl p-4 flex-1 flex flex-col justify-start overflow-hidden shadow-2xl"
-                style={{ backgroundColor: getThemeColorStyles("background", "bg") }}
-              >
-                {/* Dynamically render mockup elements utilizing live coloring */}
-                <div className="space-y-4 w-full">
+            <AnimatePresence mode="wait">
+              {viewMode === "blueprint" ? (
+                // 1. Blueprint View Mode
+                <motion.div 
+                  key="blueprint"
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -10 }}
+                  transition={{ duration: 0.3 }}
+                  className="space-y-4 flex-1 flex flex-col justify-center"
+                >
                   {wireframe.map((el) => {
-                    const blockBg = getThemeColorStyles(el.colorRole, "bg");
-                    const blockText = getThemeColorStyles(el.colorRole, "text");
-                    const isDarkThemeBg = hexToLuma(getThemeColorStyles("background", "bg")) < 120;
-
+                    const isHovered = hoveredElementId === el.id;
                     return (
-                      <div 
+                      <div
                         key={el.id}
-                        className="rounded-xl p-4 border transition-all duration-300 shadow-sm"
-                        style={{ 
-                          backgroundColor: blockBg,
-                          color: blockText,
-                          borderColor: isDarkThemeBg ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.06)"
-                        }}
+                        onMouseEnter={() => setHoveredElementId(el.id)}
+                        onMouseLeave={() => setHoveredElementId(null)}
+                        className={`relative rounded-xl border border-dashed p-4 transition-all duration-300
+                          ${isHovered 
+                            ? "border-amber-400 bg-amber-500/5 shadow-md shadow-amber-500/5 -translate-y-0.5" 
+                            : "border-slate-800 hover:border-slate-700 bg-slate-900/30"
+                          }
+                        `}
                       >
-                        {/* Mock header */}
-                        <div className="flex items-center justify-between mb-3 border-b pb-2" style={{ borderColor: 'rgba(128,128,128,0.15)' }}>
-                          <span className="text-[11px] font-bold tracking-wider uppercase opacity-90">{el.label}</span>
-                          <span className="text-[9px] font-mono opacity-60">role::{el.colorRole}</span>
+                        {/* Top labels */}
+                        <div className="flex items-center justify-between mb-2">
+                          <div className="flex items-center gap-2">
+                            {getWireframeIcon(el.type)}
+                            <span className={`text-xs font-bold font-sans ${isHovered ? 'text-amber-300' : 'text-slate-300'}`}>{el.label}</span>
+                            <span className="text-[9px] font-mono uppercase bg-slate-800 text-slate-500 px-1.5 py-0.5 rounded">
+                              {el.type}
+                            </span>
+                          </div>
+                          <span className="text-[10px] text-slate-500 font-mono italic">
+                            {el.optimalSpacing}
+                          </span>
                         </div>
 
-                        {/* Contents layout */}
-                        <div className="space-y-2">
-                          <p className="text-xs leading-relaxed opacity-85 font-medium">
-                            {/* Visual simulation content */}
-                            已實施 `{el.alignment}` 完美優化。
-                          </p>
-                          <div className="flex flex-wrap gap-2 pt-1">
-                            {el.contents.map((item, pos) => (
-                              <span 
-                                key={pos} 
-                                className="text-[10px] px-2.5 py-1 rounded-lg font-bold shadow-xs flex items-center gap-1"
-                                style={{ 
-                                  backgroundColor: isDarkThemeBg ? 'rgba(255,255,255,0.09)' : 'rgba(0,0,0,0.05)',
-                                  color: blockText
-                                }}
-                              >
-                                {item}
-                              </span>
-                            ))}
-                          </div>
+                        {/* Align rules */}
+                        <div className="text-[10px] text-slate-400 mb-3 leading-snug bg-slate-950/40 p-2 rounded border border-slate-900 font-mono">
+                          <span className="text-slate-500">對齊與留白學：</span>
+                          {el.alignment}
                         </div>
+
+                        {/* Content items mock (inside block) */}
+                        <div className="flex flex-wrap gap-1.5">
+                          {el.contents.map((item, idy) => (
+                            <span 
+                              key={idy} 
+                              className="text-[10px] font-medium bg-slate-800/80 hover:bg-slate-800 text-slate-400 border border-slate-700/50 px-2 py-1 rounded transition-colors"
+                            >
+                              + {item}
+                            </span>
+                          ))}
+                        </div>
+
+                        {/* Info overlay tooltip indicators on Blueprint hover */}
+                        {isHovered && (
+                          <div className="absolute -top-3.5 right-6 bg-slate-900 border border-amber-500/50 text-[10px] font-bold text-amber-300 px-2.5 py-1 rounded-md shadow-lg pointer-events-none animate-bounce">
+                            {el.optimalSpacing}
+                          </div>
+                        )}
                       </div>
                     );
                   })}
-                </div>
-              </div>
-            )}
+                </motion.div>
+              ) : (
+                // 2. High Class Mockup View Mode
+                <motion.div 
+                  key="mockup"
+                  initial={{ opacity: 0, scale: 0.98 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  exit={{ opacity: 0, scale: 1.02 }}
+                  transition={{ duration: 0.4, ease: "easeOut" }}
+                  className="rounded-xl p-4 flex-1 flex flex-col justify-start overflow-y-auto overflow-x-hidden shadow-2xl custom-scrollbar"
+                  style={{ backgroundColor: getThemeColorStyles("background", "bg") }}
+                >
+                  <div className="space-y-6 w-full max-w-4xl mx-auto">
+                    {wireframe.map((el) => renderMockupComponent(el))}
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </div>
+        </div>
+
+        {/* Sidebar Info/Specs Panel */}
+        <div className="xl:col-span-4 space-y-4">
+...
           </div>
         </div>
 
